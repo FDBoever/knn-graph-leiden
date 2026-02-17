@@ -23,5 +23,5 @@ setup(
             "kgl=knn_graph_leiden.cli:main",  # exposes CLI as `kgl`
         ],
     },
-    python_requires=">=3.8",
+    python_requires=">=3.10",
 )

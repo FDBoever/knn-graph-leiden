@@ -20,7 +20,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "kgl=knn_graph_leiden.cli:main",  # exposes CLI as `kgl`
+            "kgl=knn_graph_leiden.main:main",  # exposes main/cli as `kgl`
         ],
     },
     python_requires=">=3.10",

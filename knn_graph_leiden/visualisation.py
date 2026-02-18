@@ -7,9 +7,6 @@ from sklearn.metrics import silhouette_samples
 
 sns.set(style="white")  # clean style globally
 
-# ---------------------------------------------------------
-# Helper: generate color palette based on number of clusters
-# ---------------------------------------------------------
 def get_palette(n_clusters):
     """
     Return visually distinct colors for n_clusters.
@@ -27,9 +24,6 @@ def get_palette(n_clusters):
     else:
         return sns.color_palette("hls", n_clusters)
 
-# ---------------------------------------------------------
-# UMAP / 2D embedding
-# ---------------------------------------------------------
 def plot_embedding(
     embedding,
     labels,
@@ -73,9 +67,6 @@ def plot_embedding(
     plt.savefig(os.path.join(output_dir, save_name), dpi=300)
     plt.close()
 
-# ---------------------------------------------------------
-# Cluster size bar plot
-# ---------------------------------------------------------
 def plot_cluster_sizes(labels, output_dir=".", save_name="cluster_sizes.png"):
     counts = pd.Series(labels).value_counts().sort_values(ascending=False)
     clusters = counts.index.astype(str)
@@ -94,9 +85,6 @@ def plot_cluster_sizes(labels, output_dir=".", save_name="cluster_sizes.png"):
     plt.savefig(os.path.join(output_dir, save_name), dpi=300)
     plt.close()
 
-# ---------------------------------------------------------
-# Silhouette scores per cluster
-# ---------------------------------------------------------
 def plot_silhouette(embedding, labels, output_dir=".", save_name="silhouette.png"):
     labels = np.array(labels)
     n_clusters = len(np.unique(labels))
@@ -130,9 +118,6 @@ def plot_silhouette(embedding, labels, output_dir=".", save_name="silhouette.png
     plt.savefig(os.path.join(output_dir, save_name), dpi=300)
     plt.close()
 
-# ---------------------------------------------------------
-# Optional: inter-cluster similarity heatmap
-# ---------------------------------------------------------
 def plot_cluster_heatmap(adj_matrix, labels, output_dir=".", save_name="cluster_heatmap.png"):
     labels = np.array(labels)
     clusters = np.unique(labels)
@@ -200,9 +185,6 @@ def plot_embedding_grid(embedding, clusters_dict, output_dir=".", save_name="emb
     plt.savefig(os.path.join(output_dir, save_name), dpi=300)
     plt.close()
 
-# ---------------------------------------------------------
-# Summary plot generator
-# ---------------------------------------------------------
 def generate_summary_plots(embedding, labels, adjacency_matrix=None, output_dir=".", prefix="plot"):
     plot_embedding(embedding, labels, output_dir, f"{prefix}_embedding.png", "UMAP Projection")
     plot_cluster_sizes(labels, output_dir, f"{prefix}_cluster_sizes.png")
@@ -210,9 +192,6 @@ def generate_summary_plots(embedding, labels, adjacency_matrix=None, output_dir=
     if adjacency_matrix is not None:
         plot_cluster_heatmap(adjacency_matrix, labels, output_dir, f"{prefix}_cluster_heatmap.png")
 
-# ---------------------------------------------------------
-#  plot metrics vs resolution (sweep)
-# ---------------------------------------------------------
 def plot_resolution_metrics(metrics_df, output_dir=".", prefix="results"):
     """
     Plot clustering metrics as a function of resolution.

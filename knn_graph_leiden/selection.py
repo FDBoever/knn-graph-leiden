@@ -2,11 +2,6 @@ import numpy as np
 
 
 def recommend_resolution(metrics_df, tolerance=0.02):
-    """
-    Recommend an optimal Leiden resolution based on composite scoring.
-    Returns recommended resolution and scored dataframe.
-    """
-
     df = metrics_df.copy()
 
     # Normalize metrics to [0,1]

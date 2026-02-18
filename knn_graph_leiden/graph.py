@@ -3,9 +3,6 @@ import scipy.sparse as sp
 import igraph as ig
 
 
-# ---------------------------------------------------------
-# Build weighted kNN graph (memory-safe)
-# ---------------------------------------------------------
 def build_graph(
     labels,
     distances,
@@ -15,12 +12,6 @@ def build_graph(
     prune_threshold=1e-3,
     tanimoto=False,
 ):
-    """
-    Memory-efficient kNN graph builder.
-
-    Returns:
-        CSR sparse symmetric adjacency matrix (float32)
-    """
 
     n, k = labels.shape
 
@@ -28,9 +19,7 @@ def build_graph(
     rows = np.repeat(np.arange(n, dtype=np.int32), k)
     cols = labels.astype(np.int32).ravel()
 
-    # --------------------
-    # Distance → similarity
-    # --------------------
+    # Distance > similarity
     if metric == "cosine":
         vals = (1.0 - distances).ravel()
     else:
@@ -41,9 +30,7 @@ def build_graph(
     vals = vals.astype(np.float32)
 
 
-    # --------------------
     # Optional Tanimoto (chunked, memory-friendly)
-    # --------------------
     if tanimoto and data_matrix is not None:
 
         data_matrix = data_matrix.astype(np.float32, copy=False)
@@ -72,46 +59,33 @@ def build_graph(
             vals[start:end][~mask] = 0.0
 
     # --------------------
-    # Build directed sparse adjacency
-    # --------------------
     A = sp.coo_matrix((vals, (rows, cols)), shape=(n, n), dtype=np.float32)
 
     # Convert immediately to CSR (more memory stable)
     A = A.tocsr()
-
-    # --------------------
-    # Symmetrize safely
     # --------------------
     if mutual:
         A = A.minimum(A.transpose())
     else:
         A = A.maximum(A.transpose())
 
-    # --------------------
-    # Remove self-loops
-    # --------------------
+    # remove self-loops
     A.setdiag(0)
     A.eliminate_zeros()
 
-    # --------------------
-    # Prune
-    # --------------------
+    # prune
     if prune_threshold > 0 and A.nnz > 0:
         A.data[A.data < prune_threshold] = 0
         A.eliminate_zeros()
 
-    # --------------------
-    # Normalize
-    # --------------------
+    # Normalise
     if A.nnz > 0:
         A.data /= A.data.max()
 
     return A
 
 
-# ---------------------------------------------------------
 # Shared Nearest Neighbor (SNN)
-# ---------------------------------------------------------
 def refine_snn(A):
     """
     Sparse SNN refinement.
@@ -137,9 +111,7 @@ def refine_snn(A):
     return snn
 
 
-# ---------------------------------------------------------
 # Combine kNN + SNN
-# ---------------------------------------------------------
 def combine_weights(A, snn, alpha=0.8, prune_threshold=1e-3):
     """
     Combine two sparse graphs safely.
@@ -166,15 +138,8 @@ def combine_weights(A, snn, alpha=0.8, prune_threshold=1e-3):
     return final
 
 
-# ---------------------------------------------------------
-# Sparse → igraph conversion (NO Python tuples)
-# ---------------------------------------------------------
+# Sparse > igraph conversion
 def to_igraph(A):
-    """
-    Ultra memory-efficient igraph conversion.
-    Uses NumPy edges (no Python tuples).
-    Upper triangle only.
-    """
 
     if A is None or A.nnz == 0:
         return None

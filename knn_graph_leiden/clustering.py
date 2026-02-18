@@ -4,31 +4,8 @@ import leidenalg
 from tqdm import tqdm
 
 
-# ---------------------------------------------------------
 # Run Leiden clustering on igraph graph
-# ---------------------------------------------------------
 def run_leiden(A, resolution=1.0, n_iterations=-1, seed=42):
-    """
-    Run Leiden community detection on a weighted graph.
-
-    Parameters
-    ----------
-    A : scipy.sparse.csr_matrix
-        Weighted adjacency matrix (graph)
-    resolution : float
-        Leiden resolution parameter
-    n_iterations : int
-        Maximum number of iterations (-1 for default behaviour)
-    seed : int
-        Random seed for Leiden reproducibility
-
-    Returns
-    -------
-    labels : np.ndarray
-        Cluster membership for each node
-    modularity : float
-        Graph modularity for clustering
-    """
 
     if A.nnz == 0:
         print("[Warning] Graph has no edges. Cannot run Leiden.")
@@ -63,29 +40,8 @@ def run_leiden(A, resolution=1.0, n_iterations=-1, seed=42):
         return np.array([]), np.nan
 
 
-# ---------------------------------------------------------
-# Resolution sweep for cluster stability
-# ---------------------------------------------------------
+# resolution sweep for cluster stability
 def leiden_resolution_sweep(A, resolutions=None, n_iterations=-1, seed=42):
-    """
-    Run Leiden clustering over a sweep of resolution parameters.
-
-    Parameters
-    ----------
-    A : scipy.sparse.csr_matrix
-        Weighted adjacency matrix
-    resolutions : list or np.ndarray
-        List of resolution parameters to try
-    n_iterations : int
-        Maximum iterations for Leiden
-    seed : int
-        Random seed for reproducibility
-
-    Returns
-    -------
-    dict
-        Dictionary with resolution as key and tuple (labels, modularity)
-    """
 
     if resolutions is None:
         resolutions = np.linspace(0.01, 1.0, 10)
@@ -104,31 +60,8 @@ def leiden_resolution_sweep(A, resolutions=None, n_iterations=-1, seed=42):
     return results
 
 
-# ---------------------------------------------------------
-# Merge tiny clusters (optional post-processing)
-# ---------------------------------------------------------
+# merge tiny clusters (optional post-processing)
 def merge_micro_clusters(labels, min_size=5, seed=42):
-    """
-    Merge clusters smaller than min_size into nearest larger cluster.
-
-    NOTE:
-    Current implementation assigns randomly to a large cluster.
-    For production use, you may want centroid-based reassignment.
-
-    Parameters
-    ----------
-    labels : np.ndarray
-        Cluster assignments
-    min_size : int
-        Minimum allowed cluster size
-    seed : int
-        Random seed for deterministic reassignment
-
-    Returns
-    -------
-    np.ndarray
-        Updated cluster labels
-    """
 
     rng = np.random.default_rng(seed)
 

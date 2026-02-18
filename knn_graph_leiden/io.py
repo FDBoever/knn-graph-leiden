@@ -3,10 +3,6 @@ import numpy as np
 
 
 def load_clr_tsv(path):
-    """
-    Load CLR-transformed TSV.
-    Rows = samples, columns = features.
-    """
     df = pd.read_csv(path, sep="\t", index_col=0)
     return df.index.to_numpy(), df.values.astype(np.float32)
 

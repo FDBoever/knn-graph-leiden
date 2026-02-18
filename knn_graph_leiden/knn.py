@@ -2,9 +2,7 @@ import numpy as np
 import hnswlib
 from sklearn.neighbors import NearestNeighbors
 
-# ---------------------------------------------------------
-# Build approximate kNN graph using HNSW
-# ---------------------------------------------------------
+#approximate kin
 def build_knn_hnsw(
     data,
     k=30,
@@ -14,16 +12,6 @@ def build_knn_hnsw(
     ef_query=100,
     random_seed=42
 ):
-    """
-    Build approximate kNN using HNSWlib.
-
-    Returns
-    -------
-    labels : np.ndarray
-        Indices of k nearest neighbors (n_samples x k)
-    distances : np.ndarray
-        Corresponding distances
-    """
     n_samples, dim = data.shape
     space = "cosine" if metric == "cosine" else "l2"
 
@@ -37,9 +25,8 @@ def build_knn_hnsw(
     return labels.astype(np.int32), distances.astype(np.float32)
 
 
-# ---------------------------------------------------------
-# Build exact kNN using scikit-learn
-# ---------------------------------------------------------
+
+# exact kin using scikit-learn
 def build_knn_exact(data, k=30, metric="cosine", n_jobs=1):
     """
     Build exact kNN using scikit-learn.
@@ -57,9 +44,7 @@ def build_knn_exact(data, k=30, metric="cosine", n_jobs=1):
     #return labels, distances
     return labels.astype(np.int32), distances.astype(np.float32)
 
-# ---------------------------------------------------------
-# Unified kNN interface
-# ---------------------------------------------------------
+
 def build_knn(
     data,
     k=30,
@@ -68,32 +53,6 @@ def build_knn(
     n_jobs=1,
     hnsw_kwargs=None
 ):
-    """
-    Build kNN graph, choosing approximate or exact method automatically.
-
-    Parameters
-    ----------
-    data : np.ndarray
-        Data matrix (n_samples x n_features)
-    k : int
-        Number of nearest neighbors
-    metric : str
-        "cosine" or "euclidean"
-    method : str
-        "auto" | "exact" | "hnsw"
-        - "auto": use HNSW if n_samples > 10000
-    n_jobs : int
-        Threads for exact kNN
-    hnsw_kwargs : dict
-        Additional HNSW parameters: ef, M, ef_query, random_seed
-
-    Returns
-    -------
-    labels : np.ndarray
-        kNN indices
-    distances : np.ndarray
-        kNN distances
-    """
     n_samples = data.shape[0]
 
     if hnsw_kwargs is None:

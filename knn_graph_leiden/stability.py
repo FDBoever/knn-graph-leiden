@@ -2,13 +2,7 @@
 
 import numpy as np
 
-# ---------------------------
-# Step 1: Detect main clusters
-# ---------------------------
 def detect_main_clusters(labels, top_fraction=0.99):
-    """
-    Detect main clusters based on cumulative size coverage.
-    """
     unique, counts = np.unique(labels, return_counts=True)
     cluster_sizes = dict(zip(unique, counts))
     # Sort descending by size
@@ -25,17 +19,7 @@ def detect_main_clusters(labels, top_fraction=0.99):
     return main_clusters
 
 
-# ---------------------------
-# Step 2: Merge small clusters
-# ---------------------------
 def merge_small_clusters(X, labels, main_clusters):
-    """
-    Merge small clusters into nearest main cluster by centroid distance.
-    
-    Returns:
-        new_labels: np.ndarray of same length as labels
-        original_labels: np.ndarray of raw cluster labels
-    """
     labels = np.array(labels)
     new_labels = labels.copy()
     original_labels = labels.copy()

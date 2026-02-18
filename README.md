@@ -1,6 +1,26 @@
 # knn-graph-leiden
 kNN graph-based clustering pipeline using the Leiden algorithm, with optional SNN refinement and resolution sweeps for high-dimensional data.
 
+# quick install
+Consider creating a new conda environment first...
+
+```bash
+conda create -n knn-leiden python=3.10 -y
+conda activate knn-leiden
+```
+
+Clone the repository
+```bash
+git clone https://github.com/yourusername/knn-graph-leiden.git
+cd knn-graph-leiden
+```
+
+Then install with:
+```sh
+pip install -e .
+```
+
+
 ## usage example
 
 ```sh

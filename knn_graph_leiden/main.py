@@ -15,6 +15,7 @@ from knn_graph_leiden.metrics import evaluate_clustering
 from knn_graph_leiden.visualisation import plot_embedding, generate_summary_plots, plot_embedding_grid, plot_resolution_metrics
 from knn_graph_leiden.stability import detect_main_clusters, merge_small_clusters
 from knn_graph_leiden.selection import recommend_resolution
+from knn_graph_leiden.stitching import compute_cluster_connectivity, find_merges, merge_clusters
 
 # formatted printing
 def section(title):
@@ -197,8 +198,20 @@ def main():
     
     # Consolidate clusters
     section("Consolidating clusters")
-    main_clusters = detect_main_clusters(last_labels, top_fraction=0.99)
-    consolidated_labels, original_labels = merge_small_clusters(X, last_labels, main_clusters)
+    #main_clusters = detect_main_clusters(last_labels, top_fraction=0.99)
+    #consolidated_labels, original_labels = merge_small_clusters(X, last_labels, main_clusters)
+    section("Stitching over-segmented clusters")
+
+    clusters, intra, inter = compute_cluster_connectivity(A, last_labels)
+
+    merges = find_merges(clusters, intra, inter, threshold=0.05)
+
+    if merges:
+        consolidated_labels = merge_clusters(last_labels, merges)
+    else:
+        consolidated_labels = last_labels.copy()
+    original_labels = last_labels
+
     pd.DataFrame({
         "id": ids,
         "consolidated_cluster": consolidated_labels,

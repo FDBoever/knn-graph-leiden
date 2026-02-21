@@ -12,16 +12,11 @@ from knn_graph_leiden.knn import build_knn
 from knn_graph_leiden.graph import build_graph, refine_snn, combine_weights, to_igraph
 from knn_graph_leiden.clustering import run_leiden, leiden_resolution_sweep
 from knn_graph_leiden.metrics import evaluate_clustering
-from knn_graph_leiden.visualisation import (
-    plot_embedding,
-    generate_summary_plots,
-    plot_embedding_grid,
-    plot_resolution_metrics
-)
+from knn_graph_leiden.visualisation import plot_embedding, generate_summary_plots, plot_embedding_grid, plot_resolution_metrics
 from knn_graph_leiden.stability import detect_main_clusters, merge_small_clusters
 from knn_graph_leiden.selection import recommend_resolution
 from knn_graph_leiden.stitching import compute_cluster_connectivity, find_merges, merge_clusters
-
+from knn_graph_leiden.io import load_input
 from knn_graph_leiden.utils.timing import PipelineTracker
 from knn_graph_leiden.utils.logging_utils import section, info, warn
 
@@ -31,7 +26,7 @@ def parse_args():
         description="kNN graph-based clustering using Leiden algorithm, with optional approximate kNN"
     )
     parser.add_argument("-i", "--input", required=True,
-                        help="Input TSV file (rows=samples, cols=features)")
+                        help="Input .tsv file or .npy (rows=samples, cols=features)")
     parser.add_argument("-o", "--output", required=True,
                         help="Output directory for clusters, metrics, and plots")
     parser.add_argument("--prefix", type=str, default=None,
@@ -69,13 +64,6 @@ def parse_args():
     return parser.parse_args()
 
 # ---------------------------------------------------------
-def load_data(path):
-    section("Loading data")
-    df = pd.read_csv(path, sep="\t", index_col=0)
-    info(f"Data loaded: {df.shape[0]} samples x {df.shape[1]} features")
-    return df.index.values, df.values.astype(np.float32)
-
-# ---------------------------------------------------------
 def main():
     print("-" * 70)
     args = parse_args()
@@ -91,7 +79,7 @@ def main():
     # ---------------------------------------------------------
     section("Data loading")
     tracker.start("load_data")
-    ids, X = load_data(args.input)
+    ids, X = load_input(args.input)
     tracker.stop()
 
     if args.l2norm:
@@ -178,7 +166,8 @@ def main():
             tracker.stop()
             metrics["resolution"] = res
             metrics_list.append(metrics)
-            info(f"r={res} clusters={len(np.unique(labels))}")
+            info(f"Leiden, r={res},{len(np.unique(labels))} clusters")
+            
 
     metrics_df = pd.DataFrame(metrics_list)
     metrics_df.to_csv(out_path("metrics.tsv"), sep="\t", index=False)

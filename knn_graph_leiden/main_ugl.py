@@ -7,57 +7,78 @@ import pandas as pd
 import umap
 from sklearn.preprocessing import normalize
 from sklearn.cluster import DBSCAN
+from scipy import sparse
+import igraph as ig
 
 from knn_graph_leiden.clustering import run_leiden, leiden_resolution_sweep
-from knn_graph_leiden.visualisation import (
-    plot_embedding,
-    plot_embedding_grid
-)
+from knn_graph_leiden.visualisation import plot_embedding, plot_embedding_grid
 from knn_graph_leiden.validation import load_ground_truth, evaluate_ground_truth
 from knn_graph_leiden.utils.timing import PipelineTracker
 from knn_graph_leiden.utils.logging_utils import section, info, warn
+from knn_graph_leiden.io import load_input
+from knn_graph_leiden.metrics import evaluate_clustering
 
 # ---------------------------------------------------------
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="UMAP-topology-based clustering using Leiden or DBSCAN with optional sweeps"
-    )
+        description=("UMAP-based topology inference followed by clustering using "
+                     "Leiden (graph-based) and/or DBSCAN (embedding-based), "
+                     "with optional parameter sweeps and visualization."))
 
-    parser.add_argument("-i", "--input", required=True)
-    parser.add_argument("-o", "--output", required=True)
-    parser.add_argument("--prefix", type=str, default=None)
+    parser.add_argument("-i", "--input", required=True,
+                        help="Input data file (.tsv with index column OR .npy array; rows=samples, cols=features)")
+    parser.add_argument("-o", "--output", required=True,
+                        help="Output directory for clusters, metrics, runtime logs, and plots")
+    parser.add_argument("--prefix", type=str, default=None,
+                        help="Optional prefix for all output files (default: derived from input filename)")
 
     # UMAP parameters
-    parser.add_argument("--umap_neighbors", type=int, default=30)
-    parser.add_argument("--umap_min_dist", type=float, default=0.1)
-    parser.add_argument("--umap_dim", type=int, default=20)
-    parser.add_argument("--metric", choices=["euclidean", "cosine"], default="euclidean")
-    parser.add_argument("--l2norm", action="store_true")
+    parser.add_argument("--umap_neighbors", type=int, default=30,
+                        help="Number of neighbors for UMAP graph construction (n_neighbors)")
+    parser.add_argument("--umap_min_dist", type=float, default=0.1,
+                        help="UMAP min_dist parameter controlling embedding compactness")
+    parser.add_argument("--umap_dim", type=int, default=20,
+                        help="Dimensionality of UMAP embedding used for clustering")
+    parser.add_argument("--metric", choices=["euclidean", "cosine"], default="euclidean",
+                        help="Distance metric used by UMAP")
+    parser.add_argument("--l2norm", action="store_true",
+                        help="Apply L2 normalization before UMAP (recommended for cosine metric)")
 
-    # Leiden
-    parser.add_argument("--resolution", type=float, default=1.0)
-    parser.add_argument("--resolution_sweep", action="store_true")
+    # Leiden clustering
+    parser.add_argument("-r", "--resolution", type=float, default=1.0,
+                        help="Leiden resolution parameter (ignored if --resolution_sweep is used)")
+    parser.add_argument("--resolution_sweep", action="store_true",
+                        help="Perform Leiden resolution sweep over predefined grid")
 
-    # DBSCAN
-    parser.add_argument("--dbscan", action="store_true")
-    parser.add_argument("--dbscan_eps", type=float, default=0.5)
-    parser.add_argument("--dbscan_min_samples", type=int, default=10)
-    parser.add_argument("--dbscan_sweep", action="store_true")
+    # DBSCAN clustering
+    parser.add_argument("--dbscan", action="store_true",
+                        help="Run DBSCAN clustering on UMAP embedding")
+    parser.add_argument("--dbscan_eps", type=float, default=0.5,
+                        help="DBSCAN epsilon (radius parameter; ignored if --dbscan_sweep is used)")
+    parser.add_argument("--dbscan_min_samples", type=int, default=10,
+                        help="Minimum samples for DBSCAN core points")
+    parser.add_argument("--dbscan_sweep", action="store_true",
+                        help="Perform DBSCAN epsilon sweep over predefined grid")
 
     # Visualization / evaluation
-    parser.add_argument("--visualize", action="store_true")
-    parser.add_argument("--embedding_tsv", type=str, default=None)
-    parser.add_argument("--ground_truth", type=str, default=None)
+    parser.add_argument("--visualize", action="store_true",
+                        help="Generate 2D UMAP visualization of clustering results")
+    parser.add_argument("--embedding_tsv", type=str, default=None,
+                        help="Optional precomputed 2D embedding TSV (2 columns, same row order as input)")
+    parser.add_argument("--ground_truth", type=str, default=None,
+                        help="TSV file with ground-truth labels (id<TAB>cluster) for external evaluation")
 
-    parser.add_argument("--seed", type=int, default=42)
+    # Reproducibility
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for UMAP and clustering")
     return parser.parse_args()
 
-
-# ---------------------------------------------------------
-def load_data(path):
-    df = pd.read_csv(path, sep="\t", index_col=0)
-    return df.index.values, df.values.astype(np.float32)
-
+def csr_to_igraph(csr):
+    sources, targets = csr.nonzero()
+    weights = csr.data
+    g = ig.Graph(n=csr.shape[0], edges=list(zip(sources, targets)), directed=False)
+    g.es["weight"] = weights
+    return g
 
 # ---------------------------------------------------------
 def main():
@@ -75,7 +96,7 @@ def main():
     # ---------------------------------------------------------
     section("Data loading")
     tracker.start("load_data")
-    ids, X = load_data(args.input)
+    ids, X = load_input(args.input)
     tracker.stop()
 
     if args.l2norm:
@@ -96,8 +117,24 @@ def main():
     )
     embedding_hd = reducer.fit_transform(X)
     graph = reducer.graph_
+    igraph_graph = csr_to_igraph(graph)
     tracker.stop()
     info(f"UMAP graph edges: {graph.nnz}")
+
+    # Save high-dimensional embedding used for clustering
+    section("save UMAP embedding and graph")
+    tracker.start("umap_save")
+    embedding_hd_path = out_path("embedding_umap_hd.tsv")
+    pd.DataFrame(embedding_hd, index=ids, columns=[f"UMAP_{i+1}" for i in range(embedding_hd.shape[1])]).to_csv(embedding_hd_path, sep="\t")
+    info("UMAP embedding (clustering space) saved")
+    graph_path = out_path("umap_graph.npz")
+    sparse.save_npz(graph_path, graph)
+    info("UMAP graph (sparse CSR) saved")
+    #import joblib
+    #joblib.dump(reducer, out_path("umap_model.joblib"))
+    #info("saved umap model as joblib")
+    tracker.stop()
+
 
     # ---------------------------------------------------------
     section("Leiden clustering")
@@ -136,6 +173,21 @@ def main():
         )
         info("Leiden clustering saved")
 
+    section("Leiden cluster evaluation")
+
+    metrics_list = []
+    for res, (labels, modularity) in clusters_dict.items():
+        if labels.size > 0:
+            tracker.start(f"metrics_r_{res}")
+            metrics = evaluate_clustering(X, igraph_graph, labels)
+            tracker.stop()
+            metrics["resolution"] = res
+            metrics_list.append(metrics)
+            info(f"Leiden, r={res}, {len(np.unique(labels))} clusters")
+
+    metrics_df = pd.DataFrame(metrics_list)
+    metrics_df.to_csv(out_path("leiden_metrics.tsv"), sep="\t", index=False)
+
     # ---------------------------------------------------------
     section("DBSCAN clustering")
     db_labels = None
@@ -162,11 +214,25 @@ def main():
                 db_clusters_dict[eps] = (labels, None)
                 sweep_df[f"eps_{eps:.3f}"] = labels
                 n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-                info(f"DBSCAN eps={eps}: {n_clusters} clusters")
+                info(f"DBSCAN, eps={eps}, {n_clusters} clusters")
 
             sweep_df.to_csv(out_path("dbscan_sweep.tsv"), sep="\t", index=False)
             info("DBSCAN sweep clusters saved")
             db_labels = db_clusters_dict[eps_list[-1]][0]
+            
+            section("DBSCAN evaluation")
+            db_metrics_list = []
+            for eps, (labels, _) in db_clusters_dict.items():
+                tracker.start(f"metrics_dbscan_eps_{eps}")
+                metrics = evaluate_clustering(embedding_hd, None, labels)
+                tracker.stop()
+                metrics["eps"] = eps
+                db_metrics_list.append(metrics)
+
+            db_metrics_df = pd.DataFrame(db_metrics_list)
+            db_metrics_df.to_csv(out_path("dbscan_metrics.tsv"), sep="\t", index=False)
+            info("DBSCAN metrics saved")
+                                 
 
         else:
             tracker.start("dbscan_single")

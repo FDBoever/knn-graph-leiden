@@ -21,6 +21,7 @@ setup(
     entry_points={
         "console_scripts": [
             "kgl=knn_graph_leiden.main:main",  # exposes main/cli as `kgl`
+            "ugl=knn_graph_leiden.umap_graph_leiden:main"
         ],
     },
     python_requires=">=3.10",

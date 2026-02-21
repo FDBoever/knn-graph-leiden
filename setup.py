@@ -17,7 +17,8 @@ setup(
         "umap-learn",
         "matplotlib",
         "seaborn",
-        "psutil"
+        "psutil",
+        "hdbscan"
     ],
     entry_points={
         "console_scripts": [

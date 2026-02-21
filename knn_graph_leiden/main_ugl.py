@@ -9,6 +9,7 @@ from sklearn.preprocessing import normalize
 from sklearn.cluster import DBSCAN
 from scipy import sparse
 import igraph as ig
+import hdbscan
 
 from knn_graph_leiden.clustering import run_leiden, leiden_resolution_sweep
 from knn_graph_leiden.visualisation import plot_embedding, plot_embedding_grid
@@ -60,6 +61,16 @@ def parse_args():
     parser.add_argument("--dbscan_sweep", action="store_true",
                         help="Perform DBSCAN epsilon sweep over predefined grid")
 
+    # HDBSCAN clustering
+    parser.add_argument("--hdbscan", action="store_true",
+                        help="Run HDBSCAN clustering on UMAP embedding")
+    parser.add_argument("--hdbscan_min_cluster_size", type=int, default=15,
+                        help="HDBSCAN minimum cluster size (ignored if --hdbscan_sweep is used)")
+    parser.add_argument("--hdbscan_min_samples", type=int, default=None,
+                        help="HDBSCAN min_samples (default=None lets HDBSCAN choose)")
+    parser.add_argument("--hdbscan_sweep", action="store_true",
+                        help="Perform HDBSCAN min_cluster_size sweep over predefined grid")
+    
     # Visualization / evaluation
     parser.add_argument("--visualize", action="store_true",
                         help="Generate 2D UMAP visualization of clustering results")
@@ -247,6 +258,81 @@ def main():
             )
             info("DBSCAN clustering saved")
 
+
+    # ---------------------------------------------------------
+    section("HDBSCAN clustering")
+    hdb_labels = None
+    hdb_clusters_dict = {}
+
+    if args.hdbscan:
+
+        if args.hdbscan_sweep:
+
+            mcs_list = [5, 10, 15, 25, 50, 75, 100]
+            sweep_df = pd.DataFrame({"id": ids})
+
+            for mcs in mcs_list:
+                stage_name = f"hdbscan_mcs_{mcs}"
+                tracker.start(stage_name)
+
+                clusterer = hdbscan.HDBSCAN(
+                    min_cluster_size=mcs,
+                    min_samples=args.hdbscan_min_samples,
+                    metric="euclidean",
+                    cluster_selection_method="eom"
+                )
+
+                labels = clusterer.fit_predict(embedding_hd)
+                tracker.stop()
+
+                hdb_clusters_dict[mcs] = (labels, None)
+                sweep_df[f"mcs_{mcs}"] = labels
+
+                n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+                info(f"HDBSCAN, min_cluster_size={mcs}, {n_clusters} clusters")
+
+            sweep_df.to_csv(out_path("hdbscan_sweep.tsv"), sep="\t", index=False)
+            info("HDBSCAN sweep clusters saved")
+
+            hdb_labels = hdb_clusters_dict[mcs_list[-1]][0]
+
+            # Evaluation
+            section("HDBSCAN evaluation")
+            hdb_metrics_list = []
+
+            for mcs, (labels, _) in hdb_clusters_dict.items():
+                tracker.start(f"metrics_hdbscan_mcs_{mcs}")
+                metrics = evaluate_clustering(embedding_hd, None, labels)
+                tracker.stop()
+
+                metrics["min_cluster_size"] = mcs
+                hdb_metrics_list.append(metrics)
+
+            hdb_metrics_df = pd.DataFrame(hdb_metrics_list)
+            hdb_metrics_df.to_csv(out_path("hdbscan_metrics.tsv"),
+                                  sep="\t", index=False)
+            info("HDBSCAN metrics saved")
+
+        else:
+            tracker.start("hdbscan_single")
+
+            clusterer = hdbscan.HDBSCAN(
+                min_cluster_size=args.hdbscan_min_cluster_size,
+                min_samples=args.hdbscan_min_samples,
+                metric="euclidean",
+                cluster_selection_method="eom"
+            )
+
+            hdb_labels = clusterer.fit_predict(embedding_hd)
+            tracker.stop()
+
+            pd.DataFrame({"id": ids, "cluster": hdb_labels}).to_csv(
+                out_path("hdbscan_clusters.tsv"),
+                sep="\t", index=False
+            )
+
+            info("HDBSCAN clustering saved")
+
     # ---------------------------------------------------------
     section("Ground truth evaluation")
     if args.ground_truth and last_labels is not None:
@@ -290,6 +376,16 @@ def main():
             plot_embedding(embedding_2d, db_labels, output_dir=args.output,
                            save_name=f"{prefix}_umap_dbscan.png", title="DBSCAN")
 
+        if hdb_labels is not None:
+            plot_embedding(embedding_2d, hdb_labels, output_dir=args.output,
+                           save_name=f"{prefix}_umap_hdbscan.png",
+                           title="HDBSCAN")
+
+        if args.hdbscan_sweep and len(hdb_clusters_dict) > 1:
+            plot_embedding_grid(embedding_2d, hdb_clusters_dict,
+                                output_dir=args.output,
+                                save_name=f"{prefix}_umap_hdbscan_sweep.png")
+            
         if args.resolution_sweep:
             plot_embedding_grid(embedding_2d, clusters_dict, output_dir=args.output,
                                 save_name=f"{prefix}_umap_leiden_sweep.png")
